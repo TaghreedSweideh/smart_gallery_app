@@ -1,160 +1,251 @@
+// features/categories/screens/categories_screen.dart
 import 'package:flutter/material.dart';
 import 'package:sizer/sizer.dart';
-import 'package:smart_gallery_app/features/gallery/screens/gallery_screen.dart';
-
-import '../../../core/theme/app_text_styles.dart';
-import '../../../core/utils/assets.dart';
-import '../models/category_model.dart';
+import 'package:provider/provider.dart';
+import '../../gallery/screens/gallery_screen.dart';
+import '../providers/categories_provider.dart';
 import '../widgets/category_card.dart';
 
 class CategoriesScreen extends StatelessWidget {
-  final List<Category> categories = [
-    Category(
-      id: '1',
-      name: 'Favorites',
-      icon: '⭐',
-      count: 12,
-      thumbnail: AppAssets.book,
-    ),
-    Category(
-      id: '2',
-      name: 'Screenshots',
-      icon: '📸',
-      count: 20,
-      thumbnail: AppAssets.bear,
-    ),
-    Category(
-      id: '3',
-      name: 'Selfies',
-      icon: '🤳',
-      count: 8,
-      thumbnail: AppAssets.logo,
-    ),
-    Category(
-      id: '4',
-      name: 'Downloads',
-      icon: '⬇️',
-      count: 15,
-      thumbnail: AppAssets.bear,
-    ),
-    Category(
-      id: '5',
-      name: 'Camera',
-      icon: '📷',
-      count: 30,
-      thumbnail: AppAssets.book,
-    ),
-    Category(
-      id: '6',
-      name: 'Edited',
-      icon: '✏️',
-      count: 5,
-      thumbnail: AppAssets.logo,
-    ),
-    Category(
-      id: '7',
-      name: 'Duplicates',
-      icon: '🐾',
-      count: 100,
-      thumbnail: AppAssets.logo,
-    ),
-    Category(
-      id: '8',
-      name: 'Ducuments',
-      icon: '📄',
-      count: 100,
-      thumbnail: AppAssets.bear,
-    ),
-    Category(
-      id: '9',
-      name: 'Night photos',
-      icon: '🌃',
-      count: 10,
-      thumbnail: AppAssets.logo,
-    ),
-  ];
+  const CategoriesScreen({super.key});
 
-  CategoriesScreen({super.key});
+  Future<void> _deleteSelectedCategories(BuildContext context) async {
+    final provider = Provider.of<CategoriesProvider>(context, listen: false);
 
-  // void handleCategoryClick(Category category) {
-  //   if (category.id == 'duplicates') {
-  //     onNavigate('duplicates');
-  //   } else if (category.id == 'blurred') {
-  //     onNavigate('blurred');
-  //   } else {
-  //     onNavigate('category-gallery', category: category);
-  //   }
-  // }
+    if (provider.selectedCategoryIds.isEmpty) return;
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.grey[50],
-      body: CustomScrollView(
-        slivers: [
-          // Header
-          SliverAppBar(
-            pinned: true,
-            floating: false,
-            title: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+    bool confirm =
+        await showModalBottomSheet<bool>(
+          context: context,
+          backgroundColor: Colors.white,
+          shape: const RoundedRectangleBorder(
+            borderRadius: BorderRadius.only(
+              topLeft: Radius.circular(20),
+              topRight: Radius.circular(20),
+            ),
+          ),
+          builder: (ctx) => Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                Text('Categories', style: AppTextStyles.h2),
+                const Icon(Icons.folder_delete, size: 48, color: Colors.red),
+                const SizedBox(height: 16),
                 Text(
-                  'Organize your photos by type',
-                  style: AppTextStyles.label,
+                  "Delete ${provider.selectedCount} categor${provider.selectedCount > 1 ? 'ies' : 'y'}?",
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  "All photos in these categories will be deleted",
+                  style: TextStyle(fontSize: 16, color: Colors.grey),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 24),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () => Navigator.pop(ctx, false),
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: const Text("Cancel"),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: () => Navigator.pop(ctx, true),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.red,
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: const Text(
+                          "Delete",
+                          style: TextStyle(color: Colors.white),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
-            // actions: [
-            //   IconButton(
-            //     icon: Icon(
-            //       Icons.settings,
-            //       size: 20.sp,
-            //       color: Colors.grey[600],
-            //     ),
-            //     onPressed: () {
-            //       Navigator.of(context).push(
-            //         MaterialPageRoute(
-            //           builder: (context) => SettingsScreen(onBack: () {}),
-            //         ),
-            //       );
-            //     },
-            //   ),
-            // ],
           ),
+        ) ??
+        false;
 
-          // Categories Grid
-          SliverPadding(
-            padding: EdgeInsets.all(4.w),
-            sliver: SliverGrid(
-              delegate: SliverChildBuilderDelegate((context, index) {
-                final category = categories[index];
-                return CategoryCard(
-                  category: category,
-                  isCover: true, // first one is cover style
-                  onTap: () {
-                    // navigate to category gallery
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (context) => GalleryScreen(
-                          title: category.name,
-                          categoryId: category.id,
+    if (confirm == true) {
+      await provider.deleteSelectedCategories();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ChangeNotifierProvider(
+      create: (_) => CategoriesProvider(),
+      child: Consumer<CategoriesProvider>(
+        builder: (context, provider, _) {
+          return Scaffold(
+            backgroundColor: Colors.grey[50],
+            appBar: AppBar(
+              title: ValueListenableBuilder<Set<String>>(
+                valueListenable: provider.selectionNotifier,
+                builder: (context, selection, _) {
+                  return Text(
+                    selection.isEmpty
+                        ? 'Categories'
+                        : "${selection.length} selected",
+                    style: TextStyle(
+                      fontSize: selection.isEmpty ? 18 : 16,
+                      fontWeight: selection.isEmpty
+                          ? FontWeight.bold
+                          : FontWeight.normal,
+                    ),
+                  );
+                },
+              ),
+              centerTitle: true,
+              actions: [
+                ValueListenableBuilder<Set<String>>(
+                  valueListenable: provider.selectionNotifier,
+                  builder: (context, selection, _) {
+                    if (selection.isEmpty) return const SizedBox();
+                    return Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          icon: const Icon(
+                            Icons.select_all,
+                            color: Colors.blue,
+                          ),
+                          onPressed: provider.selectAll,
+                          tooltip: 'Select all',
                         ),
-                      ),
+                        IconButton(
+                          icon: const Icon(Icons.clear, color: Colors.blue),
+                          onPressed: provider.clearSelection,
+                          tooltip: 'Clear selection',
+                        ),
+                      ],
                     );
                   },
-                );
-              }, childCount: categories.length),
-              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2,
-                crossAxisSpacing: 2.w,
-                mainAxisSpacing: 4.w,
-                childAspectRatio: 0.33.w,
-              ),
+                ),
+              ],
             ),
-          ),
-        ],
+            bottomNavigationBar: ValueListenableBuilder<Set<String>>(
+              valueListenable: provider.selectionNotifier,
+              builder: (context, selection, _) {
+                if (selection.isEmpty) return const SizedBox.shrink();
+
+                return Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.1),
+                        blurRadius: 8,
+                        offset: const Offset(0, -2),
+                      ),
+                    ],
+                  ),
+                  padding: const EdgeInsets.symmetric(
+                    vertical: 12,
+                    horizontal: 16,
+                  ),
+                  child: SafeArea(
+                    top: false,
+                    child: ElevatedButton.icon(
+                      onPressed: () => _deleteSelectedCategories(context),
+                      icon: const Icon(
+                        Icons.delete,
+                        color: Colors.white,
+                        size: 20,
+                      ),
+                      label: Text(
+                        "Delete ${selection.length} categor${selection.length > 1 ? 'ies' : 'y'}",
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.redAccent,
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        minimumSize: const Size(double.infinity, 52),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+            body: CustomScrollView(
+              slivers: [
+                SliverPadding(
+                  padding: EdgeInsets.all(4.w),
+                  sliver: SliverGrid(
+                    delegate: SliverChildBuilderDelegate((context, index) {
+                      final category = provider.categories[index];
+
+                      return ValueListenableBuilder<Set<String>>(
+                        valueListenable: provider.selectionNotifier,
+                        builder: (context, selection, _) {
+                          final isSelected = selection.contains(category.id);
+                          final isSelecting = selection.isNotEmpty;
+
+                          return CategoryCard(
+                            category: category,
+                            isCover: true,
+                            isSelectable: isSelecting,
+                            isSelected: isSelected,
+                            onTap: () {
+                              if (isSelecting) {
+                                provider.toggleSelection(category.id);
+                              } else {
+                                Navigator.of(context).push(
+                                  MaterialPageRoute(
+                                    builder: (_) => GalleryScreen(
+                                      title: category.name,
+                                      categoryId: category.id,
+                                    ),
+                                  ),
+                                );
+                              }
+                            },
+                            onLongPress: () {
+                              provider.toggleSelection(category.id);
+                            },
+                          );
+                        },
+                      );
+                    }, childCount: provider.categories.length),
+                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 2,
+                      crossAxisSpacing: 2.w,
+                      mainAxisSpacing: 4.w,
+                      childAspectRatio: 0.33.w,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
       ),
     );
   }

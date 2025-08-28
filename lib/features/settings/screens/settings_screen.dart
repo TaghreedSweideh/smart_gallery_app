@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
 
 class SettingsScreen extends StatefulWidget {
-  final VoidCallback onBack;
-
-  const SettingsScreen({required this.onBack, super.key});
+  const SettingsScreen({super.key});
 
   @override
   State<SettingsScreen> createState() => _SettingsScreenState();
@@ -40,10 +38,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 1,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.grey),
-          onPressed: widget.onBack,
-        ),
         title: const Text('Settings', style: TextStyle(color: Colors.black87)),
       ),
       body: ListView(
@@ -52,6 +46,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           // Appearance
           _buildSectionTitle('Appearance'),
           Card(
+            color: Colors.white,
             child: ListTile(
               leading: Icon(
                 darkMode ? Icons.nightlight_round : Icons.wb_sunny,
@@ -74,6 +69,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           // Smart Features
           _buildSectionTitle('Smart Features'),
           Card(
+            color: Colors.white,
             child: Column(
               children: [
                 ListTile(
@@ -109,6 +105,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           // Language
           _buildSectionTitle('Language'),
           Card(
+            color: Colors.white,
             child: ListTile(
               leading: Icon(Icons.language, color: Colors.grey[600]),
               title: const Text(
@@ -136,6 +133,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           // Storage
           _buildSectionTitle('Storage'),
           Card(
+            color: Colors.white,
             child: Column(
               children: [
                 ListTile(
@@ -184,6 +182,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           // About
           _buildSectionTitle('About'),
           Card(
+            color: Colors.white,
             child: ListTile(
               leading: Icon(Icons.info_outline, color: Colors.grey[600]),
               title: const Text(

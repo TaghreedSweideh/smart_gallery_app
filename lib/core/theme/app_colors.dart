@@ -4,10 +4,10 @@ class AppColors {
   // Light Theme
   static const light = _AppThemeColors(
     background: Color(0xFFFFFFFF),
-    foreground: Color(0xFF252525), // from oklch(0.145 0 0)
+    foreground: Color(0xFF252525),
     primary: Colors.blueAccent,
     primaryForeground: Color(0xFFFFFFFF),
-    secondary: Color(0xFFF2F2FF), // oklch(0.95 ...)
+    secondary: Color(0xFFF2F2FF),
     secondaryForeground: Color(0xFF030213),
     muted: Color(0xFFECECF0),
     mutedForeground: Color(0xFF717182),
@@ -22,8 +22,8 @@ class AppColors {
 
   // Dark Theme
   static const dark = _AppThemeColors(
-    background: Color(0xFF252525), // oklch(0.145 0 0)
-    foreground: Color(0xFFFFFFFF), // oklch(0.985 0 0)
+    background: Color(0xFF252525),
+    foreground: Color(0xFFFFFFFF),
     primary: Color(0xFFFFFFFF),
     primaryForeground: Color(0xFF353535),
     secondary: Color(0xFF454545),

@@ -296,6 +296,7 @@ class _SearchScreenState extends State<SearchScreen> {
                     backgroundColor: const Color(0xFFEFF6FF),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(20),
+                      side: BorderSide(color: Colors.transparent),
                     ),
                     onPressed: () => handleTagClick(tag),
                   ),
