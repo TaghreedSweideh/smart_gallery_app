@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/theme/app_text_styles.dart';
+
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
 
@@ -36,7 +38,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 1,
-        title: const Text('Settings', style: TextStyle(color: Colors.black87)),
+        title: const Text('Settings', style: AppTextStyles.h2),
       ),
       body: ListView(
         padding: const EdgeInsets.all(16),
@@ -58,43 +60,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
               trailing: Switch(
                 value: darkMode,
                 onChanged: (v) => setState(() => darkMode = v),
+                activeTrackColor: Colors.blueAccent,
               ),
-            ),
-          ),
-
-          const SizedBox(height: 20),
-
-          // Smart Features
-          _buildSectionTitle('Smart Features'),
-          Card(
-            color: Colors.white,
-            child: Column(
-              children: [
-                ListTile(
-                  title: const Text(
-                    'Smart Suggestions',
-                    style: TextStyle(fontWeight: FontWeight.w600),
-                  ),
-                  subtitle: const Text('Learn from your deletion behavior'),
-                  trailing: Switch(
-                    value: smartSuggestions,
-                    onChanged: (v) => setState(() => smartSuggestions = v),
-                  ),
-                ),
-                const Divider(height: 1),
-                ListTile(
-                  leading: Icon(Icons.notifications, color: Colors.grey[600]),
-                  title: const Text(
-                    'Notifications',
-                    style: TextStyle(fontWeight: FontWeight.w600),
-                  ),
-                  subtitle: const Text('Get notified about duplicates'),
-                  trailing: Switch(
-                    value: notifications,
-                    onChanged: (v) => setState(() => notifications = v),
-                  ),
-                ),
-              ],
             ),
           ),
 
