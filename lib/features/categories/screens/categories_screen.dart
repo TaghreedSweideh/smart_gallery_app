@@ -1,7 +1,10 @@
-// features/categories/screens/categories_screen.dart
+// ignore_for_file: use_build_context_synchronously
+
 import 'package:flutter/material.dart';
 import 'package:sizer/sizer.dart';
 import 'package:provider/provider.dart';
+import '../../../widgets/general/dots_loader.dart';
+import '../../../core/services/user_manager.dart';
 import '../../gallery/screens/gallery_screen.dart';
 import '../providers/categories_provider.dart';
 import '../widgets/category_card.dart';
@@ -84,15 +87,60 @@ class CategoriesScreen extends StatelessWidget {
         ) ??
         false;
 
-    if (confirm == true) {
-      await provider.deleteSelectedCategories();
+    if (!confirm) return;
+
+    // call provider (your provider returns summary map)
+    final summary = await provider.deleteSelectedCategories(
+      removeFilesFromDisk: true,
+    );
+    final deleted = (summary['deletedCategories'] as List).cast<String>();
+    final failed = (summary['failed'] as Map<String, String>);
+
+    String message;
+    if (deleted.isNotEmpty && failed.isEmpty) {
+      message =
+          'Deleted ${deleted.length} categor${deleted.length > 1 ? 'ies' : 'y'}.';
+    } else if (deleted.isNotEmpty && failed.isNotEmpty) {
+      message =
+          'Deleted ${deleted.length} categories, failed ${failed.length}.';
+    } else {
+      message = 'Failed to delete selected categories.';
+    }
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
+    if (failed.isNotEmpty) {
+      final details = failed.entries
+          .map((e) => '${e.key}: ${e.value}')
+          .join('\n');
+      showDialog(
+        context: context,
+        builder: (_) => AlertDialog(
+          title: const Text('Deletion details'),
+          content: SingleChildScrollView(child: Text(details)),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return ChangeNotifierProvider(
-      create: (_) => CategoriesProvider(),
+      create: (_) {
+        final provider = CategoriesProvider();
+        UserManager.getUserId().then((id) {
+          if (id != null) {
+            provider.fetchCategories(id);
+          }
+        });
+        return provider;
+      },
       child: Consumer<CategoriesProvider>(
         builder: (context, provider, _) {
           return Scaffold(
@@ -152,7 +200,7 @@ class CategoriesScreen extends StatelessWidget {
                     color: Colors.white,
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.1),
+                        color: Colors.black.withValues(alpha: 0.1),
                         blurRadius: 8,
                         offset: const Offset(0, -2),
                       ),
@@ -194,56 +242,64 @@ class CategoriesScreen extends StatelessWidget {
                 );
               },
             ),
-            body: CustomScrollView(
-              slivers: [
-                SliverPadding(
-                  padding: EdgeInsets.all(4.w),
-                  sliver: SliverGrid(
-                    delegate: SliverChildBuilderDelegate((context, index) {
-                      final category = provider.categories[index];
+            body: provider.isLoading
+                ? const Center(child: DotsLoader())
+                : CustomScrollView(
+                    slivers: [
+                      SliverPadding(
+                        padding: EdgeInsets.all(4.w),
+                        sliver: SliverGrid(
+                          delegate: SliverChildBuilderDelegate((
+                            context,
+                            index,
+                          ) {
+                            final category = provider.categories[index];
 
-                      return ValueListenableBuilder<Set<String>>(
-                        valueListenable: provider.selectionNotifier,
-                        builder: (context, selection, _) {
-                          final isSelected = selection.contains(category.id);
-                          final isSelecting = selection.isNotEmpty;
-
-                          return CategoryCard(
-                            category: category,
-                            isCover: true,
-                            isSelectable: isSelecting,
-                            isSelected: isSelected,
-                            onTap: () {
-                              if (isSelecting) {
-                                provider.toggleSelection(category.id);
-                              } else {
-                                Navigator.of(context).push(
-                                  MaterialPageRoute(
-                                    builder: (_) => GalleryScreen(
-                                      title: category.name,
-                                      categoryId: category.id,
-                                    ),
-                                  ),
+                            return ValueListenableBuilder<Set<String>>(
+                              valueListenable: provider.selectionNotifier,
+                              builder: (context, selection, _) {
+                                final isSelected = selection.contains(
+                                  category.id,
                                 );
-                              }
-                            },
-                            onLongPress: () {
-                              provider.toggleSelection(category.id);
-                            },
-                          );
-                        },
-                      );
-                    }, childCount: provider.categories.length),
-                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 2,
-                      crossAxisSpacing: 2.w,
-                      mainAxisSpacing: 4.w,
-                      childAspectRatio: 0.33.w,
-                    ),
+                                final isSelecting = selection.isNotEmpty;
+
+                                return CategoryCard(
+                                  category: category,
+                                  isCover: true,
+                                  isSelectable: isSelecting,
+                                  isSelected: isSelected,
+                                  onTap: () {
+                                    if (isSelecting) {
+                                      provider.toggleSelection(category.id);
+                                    } else {
+                                      Navigator.of(context).push(
+                                        MaterialPageRoute(
+                                          builder: (_) => GalleryScreen(
+                                            title: category.name,
+                                            categoryId: category.id,
+                                          ),
+                                        ),
+                                      );
+                                    }
+                                  },
+                                  onLongPress: () {
+                                    provider.toggleSelection(category.id);
+                                  },
+                                );
+                              },
+                            );
+                          }, childCount: provider.categories.length),
+                          gridDelegate:
+                              SliverGridDelegateWithFixedCrossAxisCount(
+                                crossAxisCount: 2,
+                                crossAxisSpacing: 2.w,
+                                mainAxisSpacing: 4.w,
+                                childAspectRatio: 0.33.w,
+                              ),
+                        ),
+                      ),
+                    ],
                   ),
-                ),
-              ],
-            ),
           );
         },
       ),

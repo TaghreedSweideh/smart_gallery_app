@@ -31,8 +31,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
     return Scaffold(
       backgroundColor: Colors.grey[50],
       appBar: AppBar(
@@ -118,62 +116,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 items: const [
                   DropdownMenuItem(value: 'English', child: Text('English')),
                   DropdownMenuItem(value: 'Arabic', child: Text('العربية')),
-                  DropdownMenuItem(value: 'French', child: Text('Français')),
-                  DropdownMenuItem(value: 'Spanish', child: Text('Español')),
                 ],
                 onChanged: (value) {
                   if (value != null) setState(() => language = value);
                 },
               ),
-            ),
-          ),
-
-          const SizedBox(height: 20),
-
-          // Storage
-          _buildSectionTitle('Storage'),
-          Card(
-            color: Colors.white,
-            child: Column(
-              children: [
-                ListTile(
-                  leading: Icon(Icons.delete_outline, color: Colors.grey[600]),
-                  title: const Text(
-                    'Clear Cache',
-                    style: TextStyle(fontWeight: FontWeight.w600),
-                  ),
-                  subtitle: const Text('Free up storage space'),
-                  trailing: const Text(
-                    '2.4 GB',
-                    style: TextStyle(color: Colors.grey),
-                  ),
-                  onTap: () =>
-                      showAlert('Cache cleared', 'Cache cleared successfully!'),
-                ),
-                const Divider(height: 1),
-                ListTile(
-                  leading: Icon(Icons.delete_forever, color: Colors.red[600]),
-                  title: const Text(
-                    'Delete All Blurred',
-                    style: TextStyle(
-                      fontWeight: FontWeight.w600,
-                      color: Colors.red,
-                    ),
-                  ),
-                  subtitle: const Text(
-                    'Permanently remove blurred images',
-                    style: TextStyle(color: Colors.redAccent),
-                  ),
-                  trailing: const Text(
-                    '4 photos',
-                    style: TextStyle(color: Colors.redAccent),
-                  ),
-                  onTap: () => showAlert(
-                    'Delete Blurred',
-                    'All blurred images would be deleted',
-                  ),
-                ),
-              ],
             ),
           ),
 

@@ -1,3 +1,5 @@
+// ignore_for_file: use_build_context_synchronously
+
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -6,15 +8,17 @@ import 'package:photo_view/photo_view.dart';
 import 'package:provider/provider.dart';
 import 'package:smart_gallery_app/core/theme/app_text_styles.dart';
 import 'package:smart_gallery_app/widgets/general/dots_loader.dart';
+import '../../../core/services/user_manager.dart';
 import '../providers/gallery_provider.dart';
 
 class ImageViewerScreen extends StatefulWidget {
-  final List<AssetEntity> assets;
+  /// items can be AssetEntity or String (file path)
+  final List<dynamic> items;
   final int initialIndex;
 
   const ImageViewerScreen({
     super.key,
-    required this.assets,
+    required this.items,
     required this.initialIndex,
   });
 
@@ -25,17 +29,25 @@ class ImageViewerScreen extends StatefulWidget {
 class _ImageViewerScreenState extends State<ImageViewerScreen> {
   late PageController _pageController;
   late int _currentIndex;
-  bool _isVisible = true; // لإخفاء وإظهار الـ AppBar و Bottom Bar
+  bool _isVisible = true;
+
+  /// Local mutable copy of items so we can remove safely
+  late List<dynamic> _items;
 
   @override
   void initState() {
     super.initState();
-    _currentIndex = widget.initialIndex;
+    // make a modifiable copy of provided items
+    _items = List<dynamic>.from(widget.items);
+    _currentIndex = widget.initialIndex.clamp(
+      0,
+      _items.isNotEmpty ? _items.length - 1 : 0,
+    );
     _pageController = PageController(initialPage: _currentIndex);
   }
 
-  Future<void> _deleteCurrentImage(BuildContext context) async {
-    bool confirm =
+  Future<bool> _confirmDelete(BuildContext context) async {
+    final res =
         await showModalBottomSheet<bool>(
           context: context,
           backgroundColor: Colors.white,
@@ -51,7 +63,6 @@ class _ImageViewerScreenState extends State<ImageViewerScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // Handle indicator
                 Container(
                   width: 40,
                   height: 4,
@@ -60,13 +71,9 @@ class _ImageViewerScreenState extends State<ImageViewerScreen> {
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
-                SizedBox(height: 20),
-
-                // Icon
+                const SizedBox(height: 20),
                 Icon(Icons.delete_outline, size: 48, color: Colors.red),
-                SizedBox(height: 16),
-
-                // Title
+                const SizedBox(height: 16),
                 Text(
                   "Delete Photo?",
                   style: TextStyle(
@@ -75,21 +82,15 @@ class _ImageViewerScreenState extends State<ImageViewerScreen> {
                     color: Colors.black87,
                   ),
                 ),
-                SizedBox(height: 8),
-
-                // Message
+                const SizedBox(height: 8),
                 Text(
                   "This action cannot be undone",
                   style: TextStyle(fontSize: 16, color: Colors.grey[600]),
                   textAlign: TextAlign.center,
                 ),
-                SizedBox(height: 24),
-
-                // Buttons Row
+                const SizedBox(height: 24),
                 Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    // Cancel Button
                     Expanded(
                       child: OutlinedButton(
                         style: OutlinedButton.styleFrom(
@@ -99,10 +100,10 @@ class _ImageViewerScreenState extends State<ImageViewerScreen> {
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
                           ),
-                          padding: EdgeInsets.symmetric(vertical: 16),
+                          padding: const EdgeInsets.symmetric(vertical: 16),
                         ),
                         onPressed: () => Navigator.pop(ctx, false),
-                        child: Text(
+                        child: const Text(
                           "Cancel",
                           style: TextStyle(
                             fontSize: 16,
@@ -111,9 +112,7 @@ class _ImageViewerScreenState extends State<ImageViewerScreen> {
                         ),
                       ),
                     ),
-                    SizedBox(width: 12),
-
-                    // Delete Button
+                    const SizedBox(width: 12),
                     Expanded(
                       child: ElevatedButton(
                         style: ElevatedButton.styleFrom(
@@ -122,11 +121,11 @@ class _ImageViewerScreenState extends State<ImageViewerScreen> {
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
                           ),
-                          padding: EdgeInsets.symmetric(vertical: 16),
+                          padding: const EdgeInsets.symmetric(vertical: 16),
                           elevation: 0,
                         ),
                         onPressed: () => Navigator.pop(ctx, true),
-                        child: Text(
+                        child: const Text(
                           "Delete",
                           style: TextStyle(
                             fontSize: 16,
@@ -142,42 +141,184 @@ class _ImageViewerScreenState extends State<ImageViewerScreen> {
           ),
         ) ??
         false;
+    return res;
+  }
 
-    if (confirm == true) {
-      final asset = widget.assets[_currentIndex];
-      await PhotoManager.editor.deleteWithIds([asset.id]);
-      if (mounted) {
-        Provider.of<GalleryProvider>(context, listen: false).refresh();
-        Navigator.pop(context);
+  Future<void> _deleteCurrentImage(BuildContext context) async {
+    if (_items.isEmpty) return;
+
+    final confirm = await _confirmDelete(context);
+    if (!confirm) return;
+
+    final provider = Provider.of<GalleryProvider>(context, listen: false);
+    final item = _items[_currentIndex];
+
+    // ---------- Case: local asset ----------
+    if (item is AssetEntity) {
+      try {
+        await PhotoManager.editor.deleteWithIds([item.id]);
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Failed to delete photo')),
+          );
+        }
+        return;
       }
+
+      // Update provider local gallery (refresh)
+      if (mounted) {
+        try {
+          await provider.refresh();
+        } catch (_) {}
+      }
+
+      // remove from local list and move to next or pop
+      if (!mounted) return;
+      setState(() {
+        _items.removeAt(_currentIndex);
+        if (_items.isEmpty) {
+          Navigator.pop(context);
+          return;
+        } else {
+          if (_currentIndex >= _items.length) {
+            _currentIndex = _items.length - 1;
+          }
+          // jump/animate to new currentIndex
+          _pageController.jumpToPage(_currentIndex);
+        }
+      });
+      return;
     }
+
+    // ---------- Case: server phone path (String) ----------
+    if (item is String) {
+      // normalize path (remove file:// if present)
+      var phonePath = item;
+      if (phonePath.startsWith('file://')) {
+        phonePath = phonePath.replaceFirst('file://', '');
+      }
+
+      String? userId;
+      try {
+        userId = await UserManager.getUserId();
+      } catch (_) {
+        userId = null;
+      }
+
+      if (userId == null || userId.isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text('No user id available')));
+        }
+        return;
+      }
+
+      bool ok = false;
+      try {
+        // provider.deleteSingleServerImage should delete server-side and update provider._categoryImages
+        await provider.deleteSingleServerImage(
+          userId: userId,
+          phonePath: phonePath,
+        );
+        ok = true;
+      } catch (e) {
+        ok = false;
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Failed to delete file on server')),
+          );
+        }
+      }
+
+      if (!ok) return;
+
+      // Update viewer list locally: remove and navigate to next
+      if (!mounted) return;
+      setState(() {
+        _items.removeAt(_currentIndex);
+
+        if (_items.isEmpty) {
+          Navigator.pop(context);
+          return;
+        } else {
+          if (_currentIndex >= _items.length) {
+            _currentIndex = _items.length - 1;
+          }
+          _pageController.jumpToPage(_currentIndex);
+        }
+      });
+
+      return;
+    }
+
+    // Unknown type => ignore
   }
 
   String _formatDate(DateTime date) {
-    String month = DateFormat.MMMM().format(date);
-    String dayYear = DateFormat('dd, yyyy').format(date);
-    String time = DateFormat('hh:mm a').format(date);
+    final month = DateFormat.MMMM().format(date);
+    final dayYear = DateFormat('dd, yyyy').format(date);
+    final time = DateFormat('hh:mm a').format(date);
     return "$month $dayYear\n$time";
+  }
+
+  Future<File?> _fileForItem(dynamic item) async {
+    if (item is AssetEntity) {
+      try {
+        return await item.file;
+      } catch (_) {
+        return null;
+      }
+    } else if (item is String) {
+      try {
+        final f = File(item);
+        if (f.existsSync()) return f;
+        return null;
+      } catch (_) {
+        return null;
+      }
+    }
+    return null;
   }
 
   @override
   Widget build(BuildContext context) {
-    DateTime date = widget.assets[_currentIndex].createDateTime;
+    // defensive: if items empty, pop
+    if (_items.isEmpty) {
+      Future.microtask(() => Navigator.pop(context));
+      return const SizedBox.shrink();
+    }
+
+    final dynamic currentItem = _items[_currentIndex];
+    DateTime? createDate;
+    if (currentItem is AssetEntity) {
+      createDate = currentItem.createDateTime;
+    } else {
+      try {
+        final f = File(currentItem as String);
+        if (f.existsSync()) createDate = f.lastModifiedSync();
+      } catch (_) {
+        createDate = null;
+      }
+    }
+
+    final title = createDate != null ? _formatDate(createDate) : '';
 
     return Scaffold(
       backgroundColor: Colors.black,
       appBar: PreferredSize(
-        preferredSize: Size.fromHeight(56),
+        preferredSize: const Size.fromHeight(56),
         child: AnimatedSlide(
-          duration: Duration(milliseconds: 300),
-          offset: _isVisible ? Offset(0, 0) : Offset(0, -1),
+          duration: const Duration(milliseconds: 300),
+          offset: _isVisible ? Offset.zero : const Offset(0, -1),
           child: AnimatedOpacity(
-            duration: Duration(milliseconds: 300),
+            duration: const Duration(milliseconds: 300),
             opacity: _isVisible ? 1 : 0,
             child: AppBar(
               backgroundColor: Colors.white,
               title: Text(
-                _formatDate(date),
+                title,
                 textAlign: TextAlign.center,
                 style: AppTextStyles.h4,
               ),
@@ -185,26 +326,34 @@ class _ImageViewerScreenState extends State<ImageViewerScreen> {
           ),
         ),
       ),
-
       body: PageView.builder(
         controller: _pageController,
-        itemCount: widget.assets.length,
+        itemCount: _items.length,
         onPageChanged: (index) => setState(() => _currentIndex = index),
         itemBuilder: (context, index) {
+          final item = _items[index];
           return FutureBuilder<File?>(
-            future: widget.assets[index].file,
+            future: _fileForItem(item),
             builder: (context, snapshot) {
               if (!snapshot.hasData) {
-                return const Center(child: DotsLoader());
+                return const Center(
+                  child: DotsLoader(color: Colors.lightBlueAccent),
+                );
+              }
+              final file = snapshot.data;
+              if (file == null) {
+                return const Center(
+                  child: Icon(
+                    Icons.broken_image,
+                    color: Colors.white70,
+                    size: 56,
+                  ),
+                );
               }
               return GestureDetector(
-                onTap: () {
-                  setState(() {
-                    _isVisible = !_isVisible;
-                  });
-                },
+                onTap: () => setState(() => _isVisible = !_isVisible),
                 child: PhotoView(
-                  imageProvider: FileImage(snapshot.data!),
+                  imageProvider: FileImage(file),
                   backgroundDecoration: const BoxDecoration(
                     color: Colors.black,
                   ),
@@ -218,12 +367,11 @@ class _ImageViewerScreenState extends State<ImageViewerScreen> {
           );
         },
       ),
-
       bottomNavigationBar: AnimatedSlide(
-        duration: Duration(milliseconds: 300),
-        offset: _isVisible ? Offset(0, 0) : Offset(0, 1),
+        duration: const Duration(milliseconds: 300),
+        offset: _isVisible ? Offset.zero : const Offset(0, 1),
         child: AnimatedOpacity(
-          duration: Duration(milliseconds: 300),
+          duration: const Duration(milliseconds: 300),
           opacity: _isVisible ? 1 : 0,
           child: Container(
             color: Colors.white,

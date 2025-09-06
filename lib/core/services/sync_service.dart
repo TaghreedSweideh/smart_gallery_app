@@ -1,79 +1,93 @@
 import 'dart:io';
-import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:path/path.dart' as path;
+import '../network/api_client.dart';
+import 'package:flutter/foundation.dart';
 
 class SyncService {
   static const _keySyncedImages = 'synced_images';
+  final ApiClient apiClient;
 
-  /// Get already synced images
+  SyncService({required this.apiClient});
+
   Future<List<String>> getSyncedImages() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getStringList(_keySyncedImages) ?? [];
   }
 
-  /// Save synced images
   Future<void> addSyncedImages(List<String> paths) async {
     final prefs = await SharedPreferences.getInstance();
-    final existing = await getSyncedImages();
-    final updated = [...existing, ...paths];
-    await prefs.setStringList(_keySyncedImages, updated);
+    final existing = prefs.getStringList(_keySyncedImages) ?? [];
+    final set = {...existing, ...paths};
+    await prefs.setStringList(_keySyncedImages, set.toList());
   }
 
-  /// Upload images in batches
-  Future<void> uploadImages({
+  /// Upload images in batches.phonePathsForAllImages must be same order as images.
+  Future<bool> uploadImages({
     required String userId,
-    required List<File> allImages,
-    required void Function(double progress)? onProgress,
+    required List<File> images,
+    required void Function(double progress) onProgress,
     int batchSize = 20,
   }) async {
-    final syncedPaths = await getSyncedImages();
-    final newImages = allImages
-        .where((img) => !syncedPaths.contains(img.path))
-        .toList();
+    debugPrint(
+      'SyncService.uploadImages: start. totalImages=${images.length}, batchSize=$batchSize',
+    );
 
-    int total = newImages.length;
+    final synced = await getSyncedImages();
+    final newImages = images.where((f) => !synced.contains(f.path)).toList();
+    debugPrint(
+      'SyncService.uploadImages: newImages after filtering=${newImages.length} (synced before=${synced.length})',
+    );
+
+    final total = newImages.length;
+    if (total == 0) {
+      onProgress(1.0);
+      debugPrint('SyncService.uploadImages: nothing new to upload => done');
+      return true;
+    }
+
     int uploadedCount = 0;
-
-    for (int i = 0; i < newImages.length; i += batchSize) {
-      final batch = newImages.skip(i).take(batchSize).toList();
-
-      var uri = Uri.parse('https://yourserver.com/api/upload');
-      var request = http.MultipartRequest('POST', uri);
-
-      request.fields['user_id'] = userId;
-
-      for (var img in batch) {
-        request.files.add(
-          await http.MultipartFile.fromPath(
-            'images[]',
-            img.path,
-            filename: path.basename(img.path),
-          ),
+    try {
+      for (int i = 0; i < newImages.length; i += batchSize) {
+        final batch = newImages.skip(i).take(batchSize).toList();
+        debugPrint(
+          'SyncService.uploadImages: uploading batch i=$i size=${batch.length}',
         );
+
+        // For phone_paths we will send the file.path as the phone path here (SyncProvider will ideally supply nicer path)
+        final phonePathsForBatch = batch.map((f) => f.path).toList();
+
+        final resp = await apiClient.uploadImages(
+          userId: userId,
+          files: batch,
+          phonePaths: phonePathsForBatch,
+          onProgress: (p) {
+            final overall = (uploadedCount + p * batch.length) / total;
+            onProgress(overall.clamp(0.0, 1.0));
+          },
+        );
+
+        if (resp == null) {
+          debugPrint(
+            'SyncService.uploadImages: batch failed at i=$i -> aborting',
+          );
+          return false;
+        }
+
+        await addSyncedImages(batch.map((f) => f.path).toList());
+        uploadedCount += batch.length;
+        debugPrint(
+          'SyncService.uploadImages: batch success uploadedCount=$uploadedCount/$total',
+        );
+
+        onProgress((uploadedCount / total).clamp(0.0, 1.0));
       }
 
-      // Send request
-      var streamedResponse = await request.send();
-
-      // Listen to upload progress
-      final contentLength = streamedResponse.contentLength ?? 1;
-      int bytesSent = 0;
-
-      streamedResponse.stream
-          .listen((chunk) {
-            bytesSent += chunk.length;
-            double batchProgress = bytesSent / contentLength;
-            double overallProgress =
-                (uploadedCount + batchProgress * batch.length) / total;
-            if (onProgress != null) onProgress(overallProgress);
-          })
-          .onDone(() async {
-            uploadedCount += batch.length;
-            await addSyncedImages(batch.map((e) => e.path).toList());
-          });
-
-      await streamedResponse.stream.drain(); // ensure completion
+      onProgress(1.0);
+      debugPrint('SyncService.uploadImages: all batches uploaded successfully');
+      return true;
+    } catch (e, st) {
+      debugPrint('SyncService.uploadImages error: $e\n$st');
+      return false;
     }
   }
 }

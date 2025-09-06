@@ -1,15 +1,17 @@
 class Photo {
   final String id;
-  final String title;
-  final String category;
+  final String pcPath;
+  final List<String> categories;
+  final String? thumbnail;
+  final List<String> phonePaths;
   final List<String>? tags;
-  final String url;
 
-  Photo({
-    required this.id,
-    required this.title,
-    required this.category,
+  Photo(
+    this.pcPath,
+    this.thumbnail,
     this.tags,
-    required this.url,
+    this.phonePaths, {
+    required this.id,
+    required this.categories,
   });
 }

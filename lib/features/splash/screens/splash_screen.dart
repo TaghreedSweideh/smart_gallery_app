@@ -5,8 +5,9 @@ import 'package:photo_manager/photo_manager.dart';
 import 'package:sizer/sizer.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:provider/provider.dart';
-
-import 'package:smart_gallery_app/widgets/general/dots_loader.dart';
+import '../../../widgets/general/sync_progress.dart';
+import '../../../widgets/general/dots_loader.dart';
+import '../../../core/providers/sync_provider.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../home/screens/bottom_nav_bar.dart';
 import '../../../widgets/general/logo.dart';
@@ -71,7 +72,7 @@ class _SplashScreenState extends State<SplashScreen>
       );
 
       // call init() on the provider; make sure your GalleryProvider exposes a method that returns bool
-      // (true if init succeeded / permission granted), otherwise adapt below
+      // (true if init succeeded / permission granted)
       final bool galleryReady = await galleryProvider.init();
 
       if (!galleryReady) {
@@ -94,6 +95,15 @@ class _SplashScreenState extends State<SplashScreen>
         } else {
           // user chose skip; continue without gallery
         }
+      }
+      // ✅ بعد ما يجهز الـ Gallery منستدعي SyncProvider
+      final syncProvider = Provider.of<SyncProvider>(context, listen: false);
+      try {
+        // start sync but protect it so errors don't break app init
+        await syncProvider.startIfNeeded();
+      } catch (e, st) {
+        debugPrint('SyncProvider.startIfNeeded ERROR: $e\n$st');
+        // لا تقم بإيقاف الـ splash — نكمل التطبيق مهما صار
       }
     } catch (e) {
       debugPrint('Error initializing gallery provider: $e');
@@ -157,6 +167,9 @@ class _SplashScreenState extends State<SplashScreen>
 
   @override
   Widget build(BuildContext context) {
+    final sync = Provider.of<SyncProvider>(context);
+    final bool syncing = sync.syncing; // يجب أن تكون موجودة في SyncProvider
+    final double progress = sync.progress; // 0..1
     return Scaffold(
       body: SafeArea(
         child: Center(
@@ -170,7 +183,7 @@ class _SplashScreenState extends State<SplashScreen>
                   child: SizedBox(width: 70.w, child: const Logo()),
                 ),
               ),
-              SizedBox(height: 2.h),
+              // SizedBox(height: 1.h),
               Text(
                 'Smart Gallery',
                 style: AppTextStyles.h2.copyWith(color: Colors.black87),
@@ -182,9 +195,13 @@ class _SplashScreenState extends State<SplashScreen>
               ),
               SizedBox(height: 2.h),
               // show loader while init is running
-              _isInitializing
-                  ? const DotsLoader(color: Colors.black54, dotSize: 6)
-                  : const SizedBox.shrink(),
+              // _isInitializing
+              //     ? const DotsLoader(color: Colors.black54, dotSize: 6)
+              //     : const SizedBox.shrink(),
+              if (_isInitializing)
+                syncing
+                    ? SyncProgress(progress: progress)
+                    : const DotsLoader(color: Colors.black54, dotSize: 6),
             ],
           ),
         ),

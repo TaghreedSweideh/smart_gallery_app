@@ -1,76 +1,14 @@
 // features/categories/providers/category_provider.dart
 import 'package:flutter/foundation.dart' hide Category;
-import '../../../core/utils/assets.dart';
+import '../../../core/network/api_client.dart';
+import '../../../core/services/user_manager.dart';
+import '../../../main.dart';
 import '../models/category_model.dart';
 
 class CategoriesProvider extends ChangeNotifier {
-  final List<Category> _categories = [
-    Category(
-      id: '1',
-      name: 'Favorites',
-      icon: '⭐',
-      count: 12,
-      thumbnail: AppAssets.book,
-    ),
-    Category(
-      id: '2',
-      name: 'Screenshots',
-      icon: '📸',
-      count: 20,
-      thumbnail: AppAssets.bear,
-    ),
-    Category(
-      id: '3',
-      name: 'Selfies',
-      icon: '🤳',
-      count: 8,
-      thumbnail: AppAssets.logo,
-    ),
-    Category(
-      id: '4',
-      name: 'Downloads',
-      icon: '⬇️',
-      count: 15,
-      thumbnail: AppAssets.bear,
-    ),
-    Category(
-      id: '5',
-      name: 'Camera',
-      icon: '📷',
-      count: 30,
-      thumbnail: AppAssets.book,
-    ),
-    Category(
-      id: '6',
-      name: 'Edited',
-      icon: '✏️',
-      count: 5,
-      thumbnail: AppAssets.logo,
-    ),
-    Category(
-      id: '7',
-      name: 'Duplicates',
-      icon: '🐾',
-      count: 100,
-      thumbnail: AppAssets.logo,
-    ),
-    Category(
-      id: '8',
-      name: 'Documents',
-      icon: '📄',
-      count: 100,
-      thumbnail: AppAssets.bear,
-    ),
-    Category(
-      id: '9',
-      name: 'Night photos',
-      icon: '🌃',
-      count: 10,
-      thumbnail: AppAssets.logo,
-    ),
-  ];
+  final List<Category> _categories = [];
 
-  List<Category> get categories => _categories;
+  List<Category> get categories => List.unmodifiable(_categories);
 
   // حالة الاختيار
   final ValueNotifier<Set<String>> _selectionNotifier =
@@ -99,31 +37,119 @@ class CategoriesProvider extends ChangeNotifier {
     _selectionNotifier.value = Set<String>.from(_categories.map((e) => e.id));
   }
 
-  Future<void> deleteSelectedCategories() async {
-    if (_selectionNotifier.value.isEmpty) return;
+  bool _loading = false;
+  bool get isLoading => _loading;
 
+  Future<void> fetchCategories(String userId) async {
+    _loading = true;
+    notifyListeners();
     try {
-      // هنا سيتم حذف المجلدات من التخزين
-      // await _deleteCategoriesFromStorage(_selectionNotifier.value);
-
-      // إزالة المجلدات المحددة من القائمة
-      _categories.removeWhere(
-        (category) => _selectionNotifier.value.contains(category.id),
-      );
-
-      // مسح حالة الاختيار
-      _selectionNotifier.value = {};
-
-      notifyListeners();
+      final api = ApiClient(baseUrl: baseUrl);
+      final data = await api.getUserCategories(userId: userId);
+      if (data != null) {
+        _categories
+          ..clear()
+          ..addAll(data.map((json) => Category.fromJson(json)));
+      }
     } catch (e) {
-      if (kDebugMode) print('Error deleting categories: $e');
-      rethrow;
+      if (kDebugMode) print("fetchCategories error: $e");
+    } finally {
+      _loading = false;
+      notifyListeners();
     }
   }
 
-  // دالة محاكاة لحذف المجلدات من التخزين
-  Future<void> _deleteCategoriesFromStorage(Set<String> categoryIds) async {
-    // TODO: تنفيذ عملية الحذف الفعلية من التخزين
-    await Future.delayed(const Duration(milliseconds: 500));
+  /// Delete selected categories (server-side images by category AND remove category locally on success).
+  /// Returns a summary map: { "deletedCategories": [ids], "failed": { categoryId: errorMessage } }
+  Future<Map<String, dynamic>> deleteSelectedCategories({
+    bool removeFilesFromDisk = false,
+  }) async {
+    final result = <String, dynamic>{
+      'deletedCategories': <String>[],
+      'failed': <String, String>{},
+    };
+
+    final selected = Set<String>.from(_selectionNotifier.value);
+    if (selected.isEmpty) return result;
+
+    // get user id
+    String? userId;
+    try {
+      userId = await UserManager.getUserId();
+    } catch (_) {
+      userId = null;
+    }
+
+    if (userId == null || userId.isEmpty) {
+      // mark all as failed
+      for (final id in selected) {
+        (result['failed'] as Map<String, String>)[id] = 'No user id available';
+      }
+      return result;
+    }
+
+    final api = ApiClient(baseUrl: baseUrl);
+
+    // iterate categories selected and call API to delete images in category
+    for (final catIdStr in selected) {
+      int? catId;
+      try {
+        catId = int.tryParse(catIdStr);
+      } catch (_) {
+        catId = null;
+      }
+
+      if (catId == null) {
+        (result['failed'] as Map<String, String>)[catIdStr] =
+            'Invalid category id';
+        continue;
+      }
+
+      try {
+        final resp = await api.deleteImagesInCategory(
+          userId: userId,
+          categoryId: catId,
+          removeFile: removeFilesFromDisk,
+        );
+
+        if (resp == null) {
+          (result['failed'] as Map<String, String>)[catIdStr] =
+              'Network / server error';
+          continue;
+        }
+
+        // Evaluate server response:
+        // server returns {"success": bool, "deleted": [...], "failed": {...}}
+        final success = resp['success'] == true;
+        final deletedList = (resp['deleted'] is List)
+            ? List.from(resp['deleted']).map((e) => e.toString()).toList()
+            : <String>[];
+
+        if (success || deletedList.isNotEmpty) {
+          // treat as success -> remove category locally
+          _categories.removeWhere((c) => c.id == catIdStr);
+          (result['deletedCategories'] as List<String>).add(catIdStr);
+        } else {
+          // server didn't delete anything -> record failure details if any
+          final failedMap = resp['failed'];
+          final reason = (failedMap != null)
+              ? failedMap.toString()
+              : 'no deleted items';
+          (result['failed'] as Map<String, String>)[catIdStr] = reason;
+        }
+      } catch (e) {
+        (result['failed'] as Map<String, String>)[catIdStr] = 'Exception: $e';
+      }
+    }
+
+    // clear selection for categories that were deleted
+    final newSel = Set<String>.from(_selectionNotifier.value);
+    for (final id in (result['deletedCategories'] as List<String>)) {
+      newSel.remove(id);
+    }
+    _selectionNotifier.value = newSel;
+
+    notifyListeners();
+    return result;
   }
 }

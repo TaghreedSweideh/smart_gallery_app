@@ -108,7 +108,7 @@ class HomeScreen extends StatelessWidget {
                                   Navigator.of(context).push(
                                     MaterialPageRoute(
                                       builder: (_) => ImageViewerScreen(
-                                        assets: recentPhotos,
+                                        items: recentPhotos,
                                         initialIndex: index,
                                       ),
                                     ),
@@ -130,7 +130,6 @@ class HomeScreen extends StatelessWidget {
                               ),
                         ),
                       ),
-
                 // Quick Access Categories Section
                 SliverToBoxAdapter(
                   child: Padding(
@@ -163,34 +162,48 @@ class HomeScreen extends StatelessWidget {
                 ),
 
                 // Quick Access Categories Grid
-                SliverPadding(
-                  padding: EdgeInsets.only(right: 4.w, left: 4.w, bottom: 4.w),
-                  sliver: SliverGrid(
-                    delegate: SliverChildBuilderDelegate((context, index) {
-                      final category = provider.quickCategories[index];
-                      return CategoryCard(
-                        category: category,
-                        isCover: true,
-                        onTap: () {
-                          Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (_) => GalleryScreen(
-                                title: category.name,
-                                categoryId: category.id,
+                loading
+                    ? SliverToBoxAdapter(
+                        child: Center(
+                          child: DotsLoader(color: Colors.blueAccent),
+                        ),
+                      )
+                    : SliverPadding(
+                        padding: EdgeInsets.only(
+                          right: 4.w,
+                          left: 4.w,
+                          bottom: 4.w,
+                        ),
+                        sliver: SliverGrid(
+                          delegate: SliverChildBuilderDelegate((
+                            context,
+                            index,
+                          ) {
+                            final category = provider.quickCategories[index];
+                            return CategoryCard(
+                              category: category,
+                              isCover: true,
+                              onTap: () {
+                                Navigator.of(context).push(
+                                  MaterialPageRoute(
+                                    builder: (_) => GalleryScreen(
+                                      title: category.name,
+                                      categoryId: category.id,
+                                    ),
+                                  ),
+                                );
+                              },
+                            );
+                          }, childCount: provider.quickCategories.length),
+                          gridDelegate:
+                              SliverGridDelegateWithFixedCrossAxisCount(
+                                crossAxisCount: 2,
+                                crossAxisSpacing: 2.w,
+                                mainAxisSpacing: 4.w,
+                                childAspectRatio: 0.33.w,
                               ),
-                            ),
-                          );
-                        },
-                      );
-                    }, childCount: provider.quickCategories.length),
-                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 2,
-                      crossAxisSpacing: 2.w,
-                      mainAxisSpacing: 4.w,
-                      childAspectRatio: 0.33.w,
-                    ),
-                  ),
-                ),
+                        ),
+                      ),
               ],
             ),
           );

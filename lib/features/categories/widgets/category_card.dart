@@ -1,4 +1,4 @@
-// features/categories/widgets/category_card.dart
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:sizer/sizer.dart';
 import '../../../core/theme/app_text_styles.dart';
@@ -30,12 +30,12 @@ class CategoryCard extends StatelessWidget {
       onLongPress: onLongPress,
       child: Container(
         decoration: BoxDecoration(
-          color: isSelected ? Colors.blue.withOpacity(0.1) : Colors.white,
+          color: isSelected ? Colors.blue.withValues(alpha: 0.1) : Colors.white,
           borderRadius: BorderRadius.circular(10),
           border: isSelected ? Border.all(color: Colors.blue, width: 2) : null,
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.05),
+              color: Colors.black.withValues(alpha: 0.05),
               blurRadius: 4,
               offset: const Offset(0, 2),
             ),
@@ -78,13 +78,35 @@ class CategoryCard extends StatelessWidget {
                       Padding(
                         padding: EdgeInsets.symmetric(horizontal: 2.w),
                         child: ClipRRect(
-                          borderRadius: BorderRadius.all(Radius.circular(10)),
-                          child: Image.asset(
-                            category.thumbnail!,
-                            fit: BoxFit.cover,
-                            height: 16.w,
-                            width: double.infinity,
+                          borderRadius: const BorderRadius.all(
+                            Radius.circular(10),
                           ),
+                          child:
+                              category.thumbnail != null &&
+                                  category.thumbnail!.isNotEmpty
+                              ? Image.file(
+                                  File(category.thumbnail!),
+                                  fit: BoxFit.cover,
+                                  height: 16.w,
+                                  width: double.infinity,
+                                  errorBuilder: (ctx, err, st) => Container(
+                                    color: Colors.grey[200],
+                                    height: 16.w,
+                                    child: const Icon(
+                                      Icons.broken_image,
+                                      color: Colors.grey,
+                                    ),
+                                  ),
+                                )
+                              : Container(
+                                  color: Colors.grey[200],
+                                  height: 16.w,
+                                  width: double.infinity,
+                                  child: const Icon(
+                                    Icons.photo,
+                                    color: Colors.grey,
+                                  ),
+                                ),
                         ),
                       ),
                     ],
@@ -111,8 +133,6 @@ class CategoryCard extends StatelessWidget {
                       ],
                     ),
                   ),
-
-            // مؤشر التحديد - نسخة بديلة أوضح
             if (isSelected)
               Positioned(
                 top: 5,
@@ -126,7 +146,7 @@ class CategoryCard extends StatelessWidget {
                     border: Border.all(color: Colors.white, width: 2),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.3),
+                        color: Colors.black.withValues(alpha: 0.3),
                         blurRadius: 6,
                         offset: const Offset(0, 2),
                       ),

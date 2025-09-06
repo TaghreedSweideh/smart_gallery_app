@@ -31,18 +31,38 @@ class GalleryImage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      children: [
-        // الصورة الأساسية
-        _buildImageContent(),
+    // put ClipRRect once so both image and overlay are clipped consistently
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(borderRadius),
+      child: Stack(
+        children: [
+          // image area (fills available tile)
+          Positioned.fill(child: _buildImageContent()),
 
-        // مؤشر الاختيار إذا كان قابل للتحديد ومحدد
-        if (isSelectable && isSelected) _buildSelectionOverlay(),
-      ],
+          // selection overlay
+          if (isSelectable && isSelected)
+            Positioned.fill(
+              child: Container(
+                color: Colors.black.withValues(alpha: 0.5),
+                child: Center(
+                  child:
+                      selectedIndicator ??
+                      const Icon(
+                        Icons.check_circle,
+                        color: Colors.white,
+                        size: 30,
+                      ),
+                ),
+              ),
+            ),
+        ],
+      ),
     );
   }
 
   Widget _buildImageContent() {
+    // All image widgets are wrapped into a SizedBox.expand (via Positioned.fill above),
+    // so we can simply return the image and let BoxFit.cover crop it to the tile.
     if (assetEntity != null) {
       return FutureBuilder<Uint8List?>(
         future: assetEntity!.thumbnailDataWithSize(
@@ -55,30 +75,35 @@ class GalleryImage extends StatelessWidget {
           if (!snapshot.hasData) {
             return _buildErrorPlaceholder();
           }
-          return ClipRRect(
-            borderRadius: BorderRadius.circular(borderRadius),
-            child: Image.memory(
-              snapshot.data!,
-              fit: fit,
-              width: width,
-              height: height,
-            ),
+
+          return Image.memory(
+            snapshot.data!,
+            fit: fit,
+            width: width ?? double.infinity,
+            height: height ?? double.infinity,
+            gaplessPlayback: true,
           );
         },
       );
     }
 
     if (assetPath != null) {
-      return ClipRRect(
-        borderRadius: BorderRadius.circular(borderRadius),
-        child: Image.asset(assetPath!, fit: fit, width: width, height: height),
+      return Image.asset(
+        assetPath!,
+        fit: fit,
+        width: width ?? double.infinity,
+        height: height ?? double.infinity,
+        gaplessPlayback: true,
       );
     }
 
     if (imageData != null) {
-      return ClipRRect(
-        borderRadius: BorderRadius.circular(borderRadius),
-        child: Image.memory(imageData!, fit: fit, width: width, height: height),
+      return Image.memory(
+        imageData!,
+        fit: fit,
+        width: width ?? double.infinity,
+        height: height ?? double.infinity,
+        gaplessPlayback: true,
       );
     }
 
@@ -86,35 +111,14 @@ class GalleryImage extends StatelessWidget {
   }
 
   Widget _buildPlaceholder() {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.grey[200],
-        borderRadius: BorderRadius.circular(borderRadius),
-      ),
-    );
+    return Container(color: Colors.grey[200], alignment: Alignment.center);
   }
 
   Widget _buildErrorPlaceholder() {
     return Container(
-      decoration: BoxDecoration(
-        color: Colors.grey[200],
-        borderRadius: BorderRadius.circular(borderRadius),
-      ),
-      child: const Center(child: Icon(Icons.broken_image, color: Colors.grey)),
-    );
-  }
-
-  Widget _buildSelectionOverlay() {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.black.withValues(alpha: 0.5),
-        borderRadius: BorderRadius.circular(borderRadius),
-      ),
-      child: Center(
-        child:
-            selectedIndicator ??
-            const Icon(Icons.check_circle, color: Colors.white, size: 30),
-      ),
+      color: Colors.grey[200],
+      alignment: Alignment.center,
+      child: const Icon(Icons.broken_image, color: Colors.grey),
     );
   }
 }
