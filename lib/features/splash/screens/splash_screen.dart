@@ -1,5 +1,6 @@
 // ignore_for_file: use_build_context_synchronously
 
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:photo_manager/photo_manager.dart';
 import 'package:sizer/sizer.dart';
@@ -12,6 +13,7 @@ import '../../../core/theme/app_text_styles.dart';
 import '../../home/screens/bottom_nav_bar.dart';
 import '../../../widgets/general/logo.dart';
 import '../../../features/gallery/providers/gallery_provider.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -54,8 +56,43 @@ class _SplashScreenState extends State<SplashScreen>
 
     _logoController.forward();
 
-    // Delay real initialization until after first frame so context & providers exist
     WidgetsBinding.instance.addPostFrameCallback((_) => _initializeApp());
+  }
+
+  /// 🔹 طلب صلاحيات الصور/التخزين
+  Future<bool> _ensureGalleryPermission() async {
+    try {
+      final statuses = await [
+        Permission.storage,
+        Permission.photos,
+        Permission.manageExternalStorage,
+      ].request();
+
+      bool granted = false;
+
+      if (Platform.isAndroid) {
+        if (statuses[Permission.manageExternalStorage]?.isGranted == true ||
+            statuses[Permission.storage]?.isGranted == true) {
+          granted = true;
+        }
+      }
+
+      if (Platform.isIOS) {
+        if (statuses[Permission.photos]?.isGranted == true) {
+          granted = true;
+        }
+      }
+
+      final pm = await PhotoManager.requestPermissionExtend();
+      if (pm == PermissionState.authorized || pm == PermissionState.limited) {
+        granted = true;
+      }
+
+      return granted;
+    } catch (e, st) {
+      debugPrint('_ensureGalleryPermission error: $e\n$st');
+      return false;
+    }
   }
 
   Future<void> _initializeApp() async {
@@ -64,64 +101,56 @@ class _SplashScreenState extends State<SplashScreen>
     final prefs = await SharedPreferences.getInstance();
     final bool isFirstLaunch = prefs.getBool('first_launch') ?? true;
 
-    // Try initializing gallery provider (which should request permissions internally)
     try {
       final galleryProvider = Provider.of<GalleryProvider>(
         context,
         listen: false,
       );
 
-      // call init() on the provider; make sure your GalleryProvider exposes a method that returns bool
-      // (true if init succeeded / permission granted)
-      final bool galleryReady = await galleryProvider.init();
+      bool permissionOk = await _ensureGalleryPermission();
 
-      if (!galleryReady) {
-        // permission denied or init failed; prompt user
-        final action = await _showPermissionDialog();
-        if (action == _PermissionAction.openSettings) {
-          PhotoManager.openSetting();
-          // wait a bit for user to possibly grant permission
-          await Future.delayed(const Duration(seconds: 1));
-          final retry = await galleryProvider.init();
-          if (!retry) {
-            // still not granted; continue but show limited UX
-            debugPrint('Gallery permission not granted after settings.');
+      if (!permissionOk) {
+        final bool galleryReady = await galleryProvider.init();
+
+        if (!galleryReady) {
+          final action = await _showPermissionDialog();
+
+          if (action == _PermissionAction.openSettings) {
+            await openAppSettings();
+            await Future.delayed(const Duration(seconds: 1));
+            permissionOk = await _ensureGalleryPermission();
+          } else if (action == _PermissionAction.retry) {
+            permissionOk = await _ensureGalleryPermission();
+            if (!permissionOk) {
+              await galleryProvider.init();
+            }
+          } else {
+            // skip
           }
-        } else if (action == _PermissionAction.retry) {
-          final retry = await galleryProvider.init();
-          if (!retry) {
-            debugPrint('User retried but permission still denied.');
-          }
-        } else {
-          // user chose skip; continue without gallery
         }
+      } else {
+        await galleryProvider.init();
       }
-      // ✅ بعد ما يجهز الـ Gallery منستدعي SyncProvider
+
       final syncProvider = Provider.of<SyncProvider>(context, listen: false);
       try {
-        // start sync but protect it so errors don't break app init
         await syncProvider.startIfNeeded();
       } catch (e, st) {
         debugPrint('SyncProvider.startIfNeeded ERROR: $e\n$st');
-        // لا تقم بإيقاف الـ splash — نكمل التطبيق مهما صار
       }
-    } catch (e) {
-      debugPrint('Error initializing gallery provider: $e');
-      // we continue to splash fallback
+    } catch (e, st) {
+      debugPrint('Error initializing gallery provider: $e\n$st');
     }
 
-    // mark first launch if needed (we mark it regardless so that the stored flag is up-to-date)
     if (isFirstLaunch) {
       await prefs.setBool('first_launch', false);
     }
 
-    // keep splash visible for a small minimum time for the animation (so it doesn't flash)
     await Future.delayed(const Duration(milliseconds: 600));
 
     if (!mounted) return;
     setState(() => _isInitializing = false);
 
-    // Finally navigate to main app (BottomNavBar). Use replacement so splash is gone.
     Navigator.of(
       context,
     ).pushReplacement(MaterialPageRoute(builder: (_) => const BottomNavBar()));
@@ -168,8 +197,8 @@ class _SplashScreenState extends State<SplashScreen>
   @override
   Widget build(BuildContext context) {
     final sync = Provider.of<SyncProvider>(context);
-    final bool syncing = sync.syncing; // يجب أن تكون موجودة في SyncProvider
-    final double progress = sync.progress; // 0..1
+    final bool syncing = sync.syncing;
+    final double progress = sync.progress;
     return Scaffold(
       body: SafeArea(
         child: Center(
@@ -183,7 +212,6 @@ class _SplashScreenState extends State<SplashScreen>
                   child: SizedBox(width: 70.w, child: const Logo()),
                 ),
               ),
-              // SizedBox(height: 1.h),
               Text(
                 'Smart Gallery',
                 style: AppTextStyles.h2.copyWith(color: Colors.black87),
@@ -194,10 +222,6 @@ class _SplashScreenState extends State<SplashScreen>
                 style: AppTextStyles.h4.copyWith(color: Colors.black87),
               ),
               SizedBox(height: 2.h),
-              // show loader while init is running
-              // _isInitializing
-              //     ? const DotsLoader(color: Colors.black54, dotSize: 6)
-              //     : const SizedBox.shrink(),
               if (_isInitializing)
                 syncing
                     ? SyncProgress(progress: progress)
